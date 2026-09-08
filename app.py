@@ -105,6 +105,8 @@ def inject_styles() -> None:
 
 def auth_screen(store: dict) -> None:
     inject_styles()
+    if "auth_mode" not in st.session_state:
+        st.session_state.auth_mode = "Log in"
     left, right = st.columns([1.08, .92], gap="large")
     with left:
         st.markdown('<div class="eyebrow">One calm place for your day</div>', unsafe_allow_html=True)
@@ -113,19 +115,22 @@ def auth_screen(store: dict) -> None:
         st.markdown("<br><div class='today-chip'>notes · tasks · today</div>", unsafe_allow_html=True)
     with right:
         st.markdown("### Welcome to Luma")
-        st.caption("Create an account or sign back in. Your workspace is saved on this device.")
-        mode = st.radio("Account action", ["Sign in", "Create account"], horizontal=True, label_visibility="collapsed")
+        st.caption("Log in to your workspace or create a new account. Your workspace is saved on this device.")
+        mode = st.radio("Account action", ["Log in", "Create account"], key="auth_mode", horizontal=True, label_visibility="collapsed")
+        if mode == "Create account" and st.button("← Back to log in", use_container_width=True):
+            st.session_state.auth_mode = "Log in"
+            st.rerun()
         with st.form("auth_form", clear_on_submit=False):
             email = st.text_input("Email", placeholder="you@example.com")
             password = st.text_input("Password", type="password", placeholder="At least 6 characters")
-            submitted = st.form_submit_button(mode, type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Log in" if mode == "Log in" else "Create account", type="primary", use_container_width=True)
         if submitted:
             normalized = email.strip().lower()
             if "@" not in normalized or len(password) < 6:
                 st.error("Enter a valid email and a password with at least 6 characters.")
             elif mode == "Create account" and normalized in store["users"]:
                 st.error("An account with that email already exists.")
-            elif mode == "Sign in" and (normalized not in store["users"] or not verify_password(password, store["users"][normalized]["password"])):
+            elif mode == "Log in" and (normalized not in store["users"] or not verify_password(password, store["users"][normalized]["password"])):
                 st.error("That email and password do not match.")
             else:
                 if mode == "Create account":
@@ -150,8 +155,9 @@ def app_screen(store: dict, email: str) -> None:
         page = st.radio("Navigate", ["Today", "Notes", "Tasks"], label_visibility="collapsed")
         st.markdown('<div class="side-note">A little less noise. A little more room to think, remember, and get things done.</div>', unsafe_allow_html=True)
         st.caption(email)
-        if st.button("Sign out", use_container_width=True):
+        if st.button("Log out", use_container_width=True):
             st.session_state.pop("email", None)
+            st.session_state.auth_mode = "Log in"
             st.rerun()
 
     if page == "Today":
