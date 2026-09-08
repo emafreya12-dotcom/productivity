@@ -1,6 +1,14 @@
 # Luma
 
-A small Streamlit productivity workspace combining quick notes, tasks, and a calm Today view.
+A Streamlit productivity workspace combining Google Keep-style notes, tasks, habits, and a calendar.
+
+The workspace includes:
+
+- Today: searchable colored notes with pin, edit, and delete controls
+- Notes: a fuller note shelf with the same editing controls
+- Tasks: due dates, lists, and completion tracking
+- Habits: daily check-ins and seven-day progress graphs
+- Calendar: dated events with a 30-day agenda
 
 ## Run locally
 
@@ -11,7 +19,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The app stores account and workspace data in `.luma_data.json` by default. Set `LUMA_DATA_PATH` to choose another location. Passwords are stored as PBKDF2-SHA256 hashes; this local JSON store is intended for an MVP, not production multi-user hosting.
+The app stores account and workspace data in `.luma_data.json` by default. Set `LUMA_DATA_PATH` to choose another location. Passwords are stored as PBKDF2-SHA256 hashes; this local JSON store is intended for an MVP, not production multi-user hosting. Existing accounts are migrated automatically when new workspace areas are added.
 
 ## Deploy to Streamlit Community Cloud
 

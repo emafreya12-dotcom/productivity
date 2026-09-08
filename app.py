@@ -166,7 +166,8 @@ def edit_note_form(user: dict, store: dict, note: dict) -> None:
         title = st.text_input("Title", value=note.get("title", ""))
         body = st.text_area("Note", value=note.get("body", ""), height=120)
         cols = st.columns([1, 1, .8])
-        color = cols[0].selectbox("Color", ["yellow", "coral", "mint", "blue"], index=["yellow", "coral", "mint", "blue"].index(note.get("color", "yellow")))
+        colors = ["yellow", "coral", "mint", "blue"]
+        color = cols[0].selectbox("Color", colors, index=colors.index(note.get("color", "yellow")) if note.get("color", "yellow") in colors else 0)
         pinned = cols[1].checkbox("Pin to top", value=note.get("pinned", False))
         saved = cols[2].form_submit_button("Save changes", type="primary")
         if saved and body.strip():
@@ -178,8 +179,19 @@ def edit_note_form(user: dict, store: dict, note: dict) -> None:
 
 def app_screen(store: dict, email: str) -> None:
     user = store["users"][email]
-    user.setdefault("habits", [])
-    user.setdefault("events", [])
+    migrated = False
+    if "habits" not in user:
+        user["habits"] = []
+        migrated = True
+    if "events" not in user:
+        user["events"] = []
+        migrated = True
+    for note in user.get("notes", []):
+        if "pinned" not in note:
+            note["pinned"] = False
+            migrated = True
+    if migrated:
+        save_store(store)
     inject_styles()
     with st.sidebar:
         st.markdown('<div class="brand">lu<span>m</span>a</div>', unsafe_allow_html=True)
