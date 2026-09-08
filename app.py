@@ -72,6 +72,10 @@ def inject_styles() -> None:
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;600;700;800&display=swap');
         :root { --ink:#23312e; --muted:#74817d; --paper:#f7f6f1; --line:#dedfd7; --coral:#e8785d; --mint:#cfe8dc; --yellow:#f5dda0; }
         .stApp { background:var(--paper); color:var(--ink); font-family:'Manrope', sans-serif; }
+        .stApp p, .stApp label, .stApp [data-testid="stCaptionContainer"], .stApp .stMarkdown, .stApp .stRadio label { color:var(--ink); }
+        .stApp input, .stApp textarea, .stApp select { color:var(--ink) !important; background:#fff !important; }
+        .stApp input::placeholder, .stApp textarea::placeholder { color:#66756f !important; opacity:1; }
+        .stApp [data-baseweb="select"] * { color:var(--ink) !important; }
         [data-testid="stSidebar"] { background:#e7efe9; border-right:1px solid #d4ded7; }
         [data-testid="stSidebar"] > div:first-child { padding:2rem 1.25rem; }
         h1,h2,h3 { font-family:'Manrope',sans-serif; letter-spacing:-.04em; color:var(--ink); }
@@ -81,17 +85,19 @@ def inject_styles() -> None:
         .brand span { color:var(--coral); }
         .side-note { color:#617069; font-size:.8rem; line-height:1.5; margin:2.5rem 0; }
         .hero { padding:2rem 0 1.5rem; border-bottom:1px solid var(--line); margin-bottom:2rem; }
-        .hero p { color:var(--muted); max-width:34rem; font-size:1.03rem; }
+        .hero p { color:#52615c; max-width:34rem; font-size:1.03rem; }
         .stat { background:white; border:1px solid var(--line); border-radius:5px; padding:1.1rem 1.2rem; min-height:7rem; }
         .stat strong { display:block; font-size:2rem; letter-spacing:-.06em; }
         .stat small { color:var(--muted); font:500 .68rem 'DM Mono',monospace; text-transform:uppercase; }
         .note-card { border-radius:5px; padding:1.15rem; min-height:10rem; border:1px solid rgba(35,49,46,.08); margin-bottom:1rem; }
         .note-card h3 { font-size:1rem; margin:.65rem 0 .35rem; }
-        .note-card p { color:#53635d; font-size:.86rem; line-height:1.5; }
-        .note-card small { color:#6e7a74; font:500 .66rem 'DM Mono',monospace; }
+        .note-card p { color:#293a34; font-size:.86rem; line-height:1.5; }
+        .note-card small { color:#42564e; font:500 .66rem 'DM Mono',monospace; }
         .coral { background:#f5c8b8; } .mint { background:#d5eadf; } .yellow { background:#f5e5ad; } .blue { background:#cfe1ee; }
-        .section-label { font:500 .72rem 'DM Mono',monospace; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); margin:1rem 0; }
+        .section-label { font:500 .72rem 'DM Mono',monospace; text-transform:uppercase; letter-spacing:.1em; color:#52615c; margin:1rem 0; }
         .task-row { background:white; border:1px solid var(--line); border-radius:5px; padding:.55rem .85rem; margin-bottom:.5rem; }
+        .keep-board { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.8rem; }
+        .keep-board .note-card { margin:0; min-height:8.5rem; }
         .today-chip { display:inline-block; background:var(--ink); color:white; border-radius:999px; padding:.32rem .65rem; font:500 .68rem 'DM Mono',monospace; }
         .stButton button { border-radius:4px; border:1px solid var(--ink); font-weight:700; min-height:2.5rem; }
         .stButton button[kind="primary"] { background:var(--coral); border-color:var(--coral); color:white; }
@@ -173,12 +179,18 @@ def today_view(user: dict, store: dict) -> None:
     formatted_today = date.today().strftime("%A · %B %-d, %Y")
     due = [task for task in user["tasks"] if task["due"] <= today and not task["done"]]
     done = sum(task["done"] for task in user["tasks"])
-    st.markdown(f'<div class="eyebrow">{formatted_today}</div>', unsafe_allow_html=True)
-    st.markdown('<div class="hero"><h1>Good morning.</h1><p>Start small. Your most important things are waiting here, without the noise.</p></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="eyebrow">{formatted_today} · 8:42 AM</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero"><h1>Today, in one place.</h1><p>Your quick thoughts, small promises, and the one thing worth doing next.</p></div>', unsafe_allow_html=True)
     cols = st.columns(3)
     for col, number, label in zip(cols, [len(due), len(user["notes"]), done], ["open today", "saved notes", "tasks finished"]):
         with col:
             st.markdown(f'<div class="stat"><strong>{number}</strong><small>{label}</small></div>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown('<div class="section-label">Pinned thoughts · tap into the day</div>', unsafe_allow_html=True)
+    note_markup = []
+    for note in user["notes"][:3]:
+        note_markup.append(f'<div class="note-card {note.get("color", "yellow")}"><small>● {note.get("updated", "Saved")} · note</small><h3>{note["title"]}</h3><p>{note["body"]}</p></div>')
+    st.markdown(f'<div class="keep-board">{"".join(note_markup)}</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
     quick, list_col = st.columns([.9, 1.1], gap="large")
     with quick:
