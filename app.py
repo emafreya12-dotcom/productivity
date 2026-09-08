@@ -98,6 +98,7 @@ def inject_styles() -> None:
         .task-row { background:white; border:1px solid var(--line); border-radius:5px; padding:.55rem .85rem; margin-bottom:.5rem; }
         .keep-board { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.8rem; }
         .keep-board .note-card { margin:0; min-height:8.5rem; }
+        @media (max-width: 720px) { .keep-board { grid-template-columns:1fr; } }
         .today-chip { display:inline-block; background:var(--ink); color:white; border-radius:999px; padding:.32rem .65rem; font:500 .68rem 'DM Mono',monospace; }
         .stButton button { border-radius:4px; border:1px solid var(--ink); font-weight:700; min-height:2.5rem; }
         .stButton button[kind="primary"] { background:var(--coral); border-color:var(--coral); color:white; }
@@ -177,9 +178,10 @@ def app_screen(store: dict, email: str) -> None:
 def today_view(user: dict, store: dict) -> None:
     today = date.today().isoformat()
     formatted_today = date.today().strftime("%A · %B %-d, %Y")
+    current_time = datetime.now().strftime("%-I:%M %p")
     due = [task for task in user["tasks"] if task["due"] <= today and not task["done"]]
     done = sum(task["done"] for task in user["tasks"])
-    st.markdown(f'<div class="eyebrow">{formatted_today} · 8:42 AM</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="eyebrow">{formatted_today} · {current_time}</div>', unsafe_allow_html=True)
     st.markdown('<div class="hero"><h1>Today, in one place.</h1><p>Your quick thoughts, small promises, and the one thing worth doing next.</p></div>', unsafe_allow_html=True)
     cols = st.columns(3)
     for col, number, label in zip(cols, [len(due), len(user["notes"]), done], ["open today", "saved notes", "tasks finished"]):
