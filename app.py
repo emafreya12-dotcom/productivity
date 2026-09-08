@@ -69,6 +69,9 @@ def new_user(email: str, password: str) -> dict:
         "events": [
             {"id": secrets.token_hex(5), "title": "Weekly planning", "date": today, "time": "09:00", "color": "coral"},
         ],
+        "pages": [
+            {"id": secrets.token_hex(5), "title": "Welcome to your workspace", "icon": "✦", "content": "# Start here\n\nThis is your flexible space for plans, projects, and ideas.\n\n- Add a page from the sidebar\n- Keep notes quick in Today\n- Turn plans into tasks when you are ready"},
+        ],
     }
 
 
@@ -103,6 +106,14 @@ def inject_styles() -> None:
         .note-detail { background:#fff; border:1px solid var(--line); border-radius:5px; min-height:65vh; padding:clamp(1.5rem, 6vw, 5rem); }
         .note-detail h1 { font-size:clamp(2.1rem, 5vw, 4.5rem); margin:1rem 0 2rem; }
         .note-detail-body { color:#293a34; font-size:1.1rem; line-height:1.8; white-space:pre-wrap; max-width:50rem; min-height:12rem; }
+        .page-shell { display:grid; grid-template-columns:220px minmax(0, 1fr); gap:1.5rem; min-height:65vh; }
+        .page-list { border-right:1px solid var(--line); padding-right:1rem; }
+        .page-list button { width:100%; text-align:left; border:0; background:transparent; padding:.65rem; border-radius:4px; color:var(--ink); font-weight:700; }
+        .page-list button:hover, .page-list button.active { background:#e7efe9; }
+        .page-editor { background:#fff; border:1px solid var(--line); border-radius:5px; padding:clamp(1.5rem, 5vw, 4rem); }
+        .page-editor input { border:0; font-size:clamp(2rem, 5vw, 3.7rem); font-weight:800; letter-spacing:-.06em; padding:0; margin-bottom:1.5rem; }
+        .page-editor textarea { border:0; line-height:1.8; min-height:26rem; padding:0; resize:vertical; }
+        @media (max-width: 720px) { .page-shell { grid-template-columns:1fr; } .page-list { border-right:0; border-bottom:1px solid var(--line); padding:0 0 1rem; } }
         .coral { background:#f5c8b8; } .mint { background:#d5eadf; } .yellow { background:#f5e5ad; } .blue { background:#cfe1ee; }
         .section-label { font:500 .72rem 'DM Mono',monospace; text-transform:uppercase; letter-spacing:.1em; color:#52615c; margin:1rem 0; }
         .task-row { background:white; border:1px solid var(--line); border-radius:5px; padding:.55rem .85rem; margin-bottom:.5rem; }
@@ -242,6 +253,9 @@ def app_screen(store: dict, email: str) -> None:
     if "events" not in user:
         user["events"] = []
         migrated = True
+    if "pages" not in user:
+        user["pages"] = []
+        migrated = True
     for note in user.get("notes", []):
         if "pinned" not in note:
             note["pinned"] = False
@@ -252,7 +266,7 @@ def app_screen(store: dict, email: str) -> None:
     with st.sidebar:
         st.markdown('<div class="brand">lu<span>m</span>a</div>', unsafe_allow_html=True)
         st.markdown('<div class="eyebrow">Your workspace</div>', unsafe_allow_html=True)
-        page = st.radio("Navigate", ["Today", "Notes", "Tasks", "Habits", "Calendar"], label_visibility="collapsed")
+        page = st.radio("Navigate", ["Today", "Notes", "Pages", "Tasks", "Habits", "Calendar"], label_visibility="collapsed")
         st.markdown('<div class="side-note">A little less noise. A little more room to think, remember, and get things done.</div>', unsafe_allow_html=True)
         st.caption(email)
         if st.button("Log out", use_container_width=True):
@@ -264,6 +278,8 @@ def app_screen(store: dict, email: str) -> None:
         today_view(user, store)
     elif page == "Notes":
         notes_view(user, store)
+    elif page == "Pages":
+        pages_view(user, store)
     elif page == "Tasks":
         tasks_view(user, store)
     elif page == "Habits":
@@ -470,6 +486,47 @@ def notes_view(user: dict, store: dict) -> None:
                     st.session_state.pop("edit_note_id", None)
                 save_store(store)
                 st.rerun()
+
+
+def pages_view(user: dict, store: dict) -> None:
+    st.markdown('<div class="eyebrow">Pages · your flexible workspace</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero"><h1>Think in pages.</h1><p>Keep project plans, meeting notes, and long-form ideas in one calm, editable space.</p></div>', unsafe_allow_html=True)
+    if "active_page_id" not in st.session_state or not any(page["id"] == st.session_state.active_page_id for page in user["pages"]):
+        st.session_state.active_page_id = user["pages"][0]["id"] if user["pages"] else None
+    active_page = next((page for page in user["pages"] if page["id"] == st.session_state.active_page_id), None)
+    with st.container():
+        page_columns = st.columns([.75, 2.25], gap="large")
+        with page_columns[0]:
+            st.markdown('<div class="section-label">Workspace pages</div>', unsafe_allow_html=True)
+            for page in user["pages"]:
+                if st.button(f'{page.get("icon", "□")}  {page["title"]}', key=f"page_select_{page['id']}", use_container_width=True):
+                    st.session_state.active_page_id = page["id"]
+                    st.rerun()
+            if st.button("+ New page", key="new_page", use_container_width=True):
+                new_page = {"id": secrets.token_hex(5), "title": "Untitled page", "icon": "□", "content": ""}
+                user["pages"].append(new_page)
+                st.session_state.active_page_id = new_page["id"]
+                save_store(store)
+                st.rerun()
+        with page_columns[1]:
+            if active_page:
+                with st.form(f"page_editor_{active_page['id']}"):
+                    title = st.text_input("Page title", value=active_page["title"], label_visibility="collapsed")
+                    content = st.text_area("Page content", value=active_page.get("content", ""), label_visibility="collapsed", height=420, placeholder="Start writing your page...")
+                    editor_cols = st.columns([1, 1, 1, 2])
+                    save_page = editor_cols[0].form_submit_button("Save page", type="primary")
+                    delete_page = editor_cols[1].form_submit_button("Delete page")
+                    if save_page:
+                        active_page.update({"title": title.strip() or "Untitled page", "content": content})
+                        save_store(store)
+                        st.rerun()
+                    if delete_page:
+                        user["pages"].remove(active_page)
+                        st.session_state.active_page_id = user["pages"][0]["id"] if user["pages"] else None
+                        save_store(store)
+                        st.rerun()
+            else:
+                st.info("Create your first page from the sidebar.")
 
 
 def tasks_view(user: dict, store: dict) -> None:
