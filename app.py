@@ -370,11 +370,11 @@ def habits_view(user: dict, store: dict) -> None:
                 user["habits"].remove(habit)
                 save_store(store)
                 st.rerun()
-        graph_values = {}
+        graph_values = []
         for offset in range(6, -1, -1):
             day = today - timedelta(days=offset)
-            graph_values[day.strftime("%a")] = 1 if history.get(day.isoformat(), False) else 0
-        st.bar_chart(graph_values, height=120, color="#e8785d")
+            graph_values.append(1 if history.get(day.isoformat(), False) else 0)
+        st.bar_chart({"Completed": graph_values}, height=120, color="#e8785d")
     with st.expander("+ Add a habit", expanded=not user["habits"]):
         with st.form("new_habit"):
             cols = st.columns([1.4, 1, .8])
