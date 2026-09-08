@@ -161,6 +161,21 @@ def task_label(task: dict) -> str:
     return task["title"]
 
 
+def edit_note_form(user: dict, store: dict, note: dict) -> None:
+    with st.form(f"edit_note_{note['id']}"):
+        title = st.text_input("Title", value=note.get("title", ""))
+        body = st.text_area("Note", value=note.get("body", ""), height=120)
+        cols = st.columns([1, 1, .8])
+        color = cols[0].selectbox("Color", ["yellow", "coral", "mint", "blue"], index=["yellow", "coral", "mint", "blue"].index(note.get("color", "yellow")))
+        pinned = cols[1].checkbox("Pin to top", value=note.get("pinned", False))
+        saved = cols[2].form_submit_button("Save changes", type="primary")
+        if saved and body.strip():
+            note.update({"title": title.strip() or "Untitled note", "body": body.strip(), "color": color, "pinned": pinned, "updated": "Just now"})
+            save_store(store)
+            st.session_state.pop("edit_note_id", None)
+            st.rerun()
+
+
 def app_screen(store: dict, email: str) -> None:
     user = store["users"][email]
     user.setdefault("habits", [])
@@ -221,6 +236,15 @@ def today_view(user: dict, store: dict) -> None:
     notes = [note for note in user["notes"] if (not search.strip() or search.lower() in f"{note['title']} {note['body']}".lower()) and (view == "All notes" or note.get("pinned", False))]
     notes.sort(key=lambda note: (not note.get("pinned", False), note.get("updated", "")))
     st.markdown('<div class="section-label">Pinned notes</div>', unsafe_allow_html=True)
+    editing_id = st.session_state.get("edit_note_id")
+    if editing_id:
+        editing_note = next((note for note in user["notes"] if note["id"] == editing_id), None)
+        if editing_note:
+            st.markdown('<div class="section-label">Edit note</div>', unsafe_allow_html=True)
+            edit_note_form(user, store, editing_note)
+            if st.button("Cancel editing", key="cancel_note_edit"):
+                st.session_state.pop("edit_note_id", None)
+                st.rerun()
     note_columns = st.columns(3)
     for index, note in enumerate(notes):
         if "pinned" not in note:
@@ -228,12 +252,18 @@ def today_view(user: dict, store: dict) -> None:
         with note_columns[index % 3]:
             st.markdown(f'<div class="note-card {note.get("color", "yellow")}"><small>{"📌 Pinned" if note.get("pinned") else "Note"} · {note.get("updated", "Saved")}</small><h3>{note["title"]}</h3><p>{note["body"]}</p></div>', unsafe_allow_html=True)
             action_cols = st.columns(2)
-            if action_cols[0].button("Unpin" if note.get("pinned") else "Pin", key=f"pin_{note['id']}"):
+            if action_cols[0].button("Edit", key=f"edit_{note['id']}"):
+                st.session_state.edit_note_id = note["id"]
+                st.rerun()
+            if action_cols[1].button("Unpin" if note.get("pinned") else "Pin", key=f"pin_{note['id']}"):
                 note["pinned"] = not note.get("pinned", False)
                 save_store(store)
                 st.rerun()
-            if action_cols[1].button("Delete", key=f"delete_{note['id']}"):
+            delete_cols = st.columns(1)
+            if delete_cols[0].button("Delete note", key=f"delete_{note['id']}"):
                 user["notes"].remove(note)
+                if st.session_state.get("edit_note_id") == note["id"]:
+                    st.session_state.pop("edit_note_id", None)
                 save_store(store)
                 st.rerun()
 
@@ -330,10 +360,28 @@ def notes_view(user: dict, store: dict) -> None:
                 save_store(store)
                 st.rerun()
     st.markdown("<br>", unsafe_allow_html=True)
+    editing_id = st.session_state.get("edit_note_id")
+    if editing_id:
+        editing_note = next((note for note in user["notes"] if note["id"] == editing_id), None)
+        if editing_note:
+            st.markdown('<div class="section-label">Edit note</div>', unsafe_allow_html=True)
+            edit_note_form(user, store, editing_note)
+            if st.button("Cancel editing", key="cancel_notes_edit"):
+                st.session_state.pop("edit_note_id", None)
+                st.rerun()
     columns = st.columns(3)
     for index, note in enumerate(user["notes"]):
         with columns[index % 3]:
             st.markdown(f'<div class="note-card {note.get("color", "yellow")}"><small>{note.get("updated", "Saved")}</small><h3>{note["title"]}</h3><p>{note["body"]}</p></div>', unsafe_allow_html=True)
+            if st.button("Edit", key=f"notes_edit_{note['id']}"):
+                st.session_state.edit_note_id = note["id"]
+                st.rerun()
+            if st.button("Delete note", key=f"notes_delete_{note['id']}"):
+                user["notes"].remove(note)
+                if st.session_state.get("edit_note_id") == note["id"]:
+                    st.session_state.pop("edit_note_id", None)
+                save_store(store)
+                st.rerun()
 
 
 def tasks_view(user: dict, store: dict) -> None:
