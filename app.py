@@ -100,6 +100,9 @@ def inject_styles() -> None:
         .note-card h3 { font-size:1rem; margin:.65rem 0 .35rem; }
         .note-card p { color:#293a34; font-size:.86rem; line-height:1.5; }
         .note-card small { color:#42564e; font:500 .66rem 'DM Mono',monospace; }
+        .note-detail { background:#fff; border:1px solid var(--line); border-radius:5px; min-height:65vh; padding:clamp(1.5rem, 6vw, 5rem); }
+        .note-detail h1 { font-size:clamp(2.1rem, 5vw, 4.5rem); margin:1rem 0 2rem; }
+        .note-detail-body { color:#293a34; font-size:1.1rem; line-height:1.8; white-space:pre-wrap; max-width:50rem; min-height:12rem; }
         .coral { background:#f5c8b8; } .mint { background:#d5eadf; } .yellow { background:#f5e5ad; } .blue { background:#cfe1ee; }
         .section-label { font:500 .72rem 'DM Mono',monospace; text-transform:uppercase; letter-spacing:.1em; color:#52615c; margin:1rem 0; }
         .task-row { background:white; border:1px solid var(--line); border-radius:5px; padding:.55rem .85rem; margin-bottom:.5rem; }
@@ -177,6 +180,45 @@ def edit_note_form(user: dict, store: dict, note: dict) -> None:
             st.rerun()
 
 
+def note_detail_view(user: dict, store: dict, note: dict) -> None:
+    st.markdown('<div class="note-detail">', unsafe_allow_html=True)
+    st.markdown(f'<div class="eyebrow">Full note · {note.get("updated", "Saved")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<h1>{note.get("title", "Untitled note")}</h1>', unsafe_allow_html=True)
+    st.markdown(f'<div class="note-detail-body">{note.get("body", "")}</div>', unsafe_allow_html=True)
+    reminder = note.get("reminder")
+    if reminder:
+        st.info(f"Reminder set for {reminder['date']} at {reminder['time']}")
+    with st.expander("Set a reminder", expanded=not bool(reminder)):
+        with st.form(f"reminder_{note['id']}"):
+            reminder_date = st.date_input("Date", value=date.fromisoformat(reminder["date"]) if reminder else date.today())
+            reminder_time = st.time_input("Time", value=datetime.strptime(reminder["time"], "%H:%M").time() if reminder else datetime.now().replace(second=0, microsecond=0).time())
+            reminder_cols = st.columns([1, 1])
+            set_reminder = reminder_cols[0].form_submit_button("Save reminder", type="primary")
+            clear_reminder = reminder_cols[1].form_submit_button("Clear reminder")
+            if set_reminder:
+                note["reminder"] = {"date": reminder_date.isoformat(), "time": reminder_time.strftime("%H:%M")}
+                save_store(store)
+                st.rerun()
+            if clear_reminder:
+                note.pop("reminder", None)
+                save_store(store)
+                st.rerun()
+    detail_cols = st.columns([1, 1, 1])
+    if detail_cols[0].button("Edit note", key=f"detail_edit_{note['id']}"):
+        st.session_state.edit_note_id = note["id"]
+        st.session_state.open_note_id = None
+        st.rerun()
+    if detail_cols[1].button("Delete note", key=f"detail_delete_{note['id']}"):
+        user["notes"].remove(note)
+        st.session_state.open_note_id = None
+        save_store(store)
+        st.rerun()
+    if detail_cols[2].button("Back to notes", key=f"detail_back_{note['id']}"):
+        st.session_state.open_note_id = None
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
 def edit_task_form(store: dict, task: dict) -> None:
     with st.form(f"edit_task_{task['id']}"):
         cols = st.columns([2, 1, 1, .8])
@@ -232,6 +274,13 @@ def app_screen(store: dict, email: str) -> None:
 
 def today_view(user: dict, store: dict) -> None:
     today = date.today().isoformat()
+    open_note_id = st.session_state.get("open_note_id")
+    if open_note_id:
+        open_note = next((note for note in user["notes"] if note["id"] == open_note_id), None)
+        if open_note:
+            note_detail_view(user, store, open_note)
+            return
+        st.session_state.pop("open_note_id", None)
     st.markdown('<div class="eyebrow">Luma Keep · your notes</div>', unsafe_allow_html=True)
     st.markdown('<div class="hero"><h1>Today</h1><p>Capture a thought, pin what matters, and find it again when you need it.</p></div>', unsafe_allow_html=True)
     search = st.text_input("Search your notes", placeholder="Search notes", label_visibility="collapsed")
@@ -278,7 +327,10 @@ def today_view(user: dict, store: dict) -> None:
         with note_columns[index % 3]:
             st.markdown(f'<div class="note-card {note.get("color", "yellow")}"><small>{"📌 Pinned" if note.get("pinned") else "Note"} · {note.get("updated", "Saved")}</small><h3>{note["title"]}</h3><p>{note["body"]}</p></div>', unsafe_allow_html=True)
             action_cols = st.columns(2)
-            if action_cols[0].button("Edit", key=f"edit_{note['id']}"):
+            if action_cols[0].button("Open", key=f"open_{note['id']}"):
+                st.session_state.open_note_id = note["id"]
+                st.rerun()
+            if action_cols[1].button("Edit", key=f"edit_{note['id']}"):
                 st.session_state.edit_note_id = note["id"]
                 st.rerun()
             if action_cols[1].button("Unpin" if note.get("pinned") else "Pin", key=f"pin_{note['id']}"):
@@ -374,6 +426,13 @@ def calendar_view(user: dict, store: dict) -> None:
 
 
 def notes_view(user: dict, store: dict) -> None:
+    open_note_id = st.session_state.get("open_note_id")
+    if open_note_id:
+        open_note = next((note for note in user["notes"] if note["id"] == open_note_id), None)
+        if open_note:
+            note_detail_view(user, store, open_note)
+            return
+        st.session_state.pop("open_note_id", None)
     st.markdown('<div class="eyebrow">Notes</div>', unsafe_allow_html=True)
     st.markdown('<div class="hero"><h1>Keep the good ideas.</h1><p>A flexible shelf for thoughts, lists, and little reminders.</p></div>', unsafe_allow_html=True)
     with st.expander("+ New note", expanded=False):
@@ -399,6 +458,9 @@ def notes_view(user: dict, store: dict) -> None:
     for index, note in enumerate(user["notes"]):
         with columns[index % 3]:
             st.markdown(f'<div class="note-card {note.get("color", "yellow")}"><small>{note.get("updated", "Saved")}</small><h3>{note["title"]}</h3><p>{note["body"]}</p></div>', unsafe_allow_html=True)
+            if st.button("Open note", key=f"notes_open_{note['id']}"):
+                st.session_state.open_note_id = note["id"]
+                st.rerun()
             if st.button("Edit", key=f"notes_edit_{note['id']}"):
                 st.session_state.edit_note_id = note["id"]
                 st.rerun()
