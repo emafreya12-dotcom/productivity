@@ -177,6 +177,20 @@ def edit_note_form(user: dict, store: dict, note: dict) -> None:
             st.rerun()
 
 
+def edit_task_form(store: dict, task: dict) -> None:
+    with st.form(f"edit_task_{task['id']}"):
+        cols = st.columns([2, 1, 1, .8])
+        title = cols[0].text_input("Task", value=task["title"])
+        due = cols[1].date_input("Due", value=date.fromisoformat(task["due"]))
+        project = cols[2].text_input("List", value=task.get("project", "Today"))
+        saved = cols[3].form_submit_button("Save", type="primary")
+        if saved and title.strip():
+            task.update({"title": title.strip(), "due": due.isoformat(), "project": project.strip() or "Today"})
+            save_store(store)
+            st.session_state.pop("edit_task_id", None)
+            st.rerun()
+
+
 def app_screen(store: dict, email: str) -> None:
     user = store["users"][email]
     migrated = False
@@ -410,8 +424,17 @@ def tasks_view(user: dict, store: dict) -> None:
             save_store(store)
             st.rerun()
     st.markdown("<br>", unsafe_allow_html=True)
+    editing_id = st.session_state.get("edit_task_id")
+    if editing_id:
+        editing_task = next((task for task in user["tasks"] if task["id"] == editing_id), None)
+        if editing_task:
+            st.markdown('<div class="section-label">Edit task</div>', unsafe_allow_html=True)
+            edit_task_form(store, editing_task)
+            if st.button("Cancel editing", key="cancel_task_edit"):
+                st.session_state.pop("edit_task_id", None)
+                st.rerun()
     for task in user["tasks"]:
-        cols = st.columns([.08, 2.8, .8, .8])
+        cols = st.columns([.08, 2.2, .7, .7, .7])
         with cols[0]:
             checked = st.checkbox("Done", value=task["done"], key=f"task_{task['id']}", label_visibility="collapsed")
         if checked != task["done"]:
@@ -424,6 +447,16 @@ def tasks_view(user: dict, store: dict) -> None:
             st.caption(task["project"])
         with cols[3]:
             st.caption(task["due"])
+        with cols[4]:
+            if st.button("Edit", key=f"task_edit_{task['id']}"):
+                st.session_state.edit_task_id = task["id"]
+                st.rerun()
+            if st.button("Delete", key=f"task_delete_{task['id']}"):
+                user["tasks"].remove(task)
+                if st.session_state.get("edit_task_id") == task["id"]:
+                    st.session_state.pop("edit_task_id", None)
+                save_store(store)
+                st.rerun()
 
 
 store = load_store()
