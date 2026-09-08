@@ -62,6 +62,13 @@ def new_user(email: str, password: str) -> dict:
             {"id": secrets.token_hex(5), "title": "Send the follow-up email", "due": today, "project": "Work", "done": False},
             {"id": secrets.token_hex(5), "title": "Plan groceries", "due": (date.today() + timedelta(days=1)).isoformat(), "project": "Personal", "done": False},
         ],
+        "habits": [
+            {"id": secrets.token_hex(5), "name": "Drink water", "goal": "8 glasses", "color": "blue", "history": {}},
+            {"id": secrets.token_hex(5), "name": "Read", "goal": "10 minutes", "color": "mint", "history": {}},
+        ],
+        "events": [
+            {"id": secrets.token_hex(5), "title": "Weekly planning", "date": today, "time": "09:00", "color": "coral"},
+        ],
     }
 
 
@@ -156,11 +163,13 @@ def task_label(task: dict) -> str:
 
 def app_screen(store: dict, email: str) -> None:
     user = store["users"][email]
+    user.setdefault("habits", [])
+    user.setdefault("events", [])
     inject_styles()
     with st.sidebar:
         st.markdown('<div class="brand">lu<span>m</span>a</div>', unsafe_allow_html=True)
         st.markdown('<div class="eyebrow">Your workspace</div>', unsafe_allow_html=True)
-        page = st.radio("Navigate", ["Today", "Notes", "Tasks"], label_visibility="collapsed")
+        page = st.radio("Navigate", ["Today", "Notes", "Tasks", "Habits", "Calendar"], label_visibility="collapsed")
         st.markdown('<div class="side-note">A little less noise. A little more room to think, remember, and get things done.</div>', unsafe_allow_html=True)
         st.caption(email)
         if st.button("Log out", use_container_width=True):
@@ -172,8 +181,12 @@ def app_screen(store: dict, email: str) -> None:
         today_view(user, store)
     elif page == "Notes":
         notes_view(user, store)
-    else:
+    elif page == "Tasks":
         tasks_view(user, store)
+    elif page == "Habits":
+        habits_view(user, store)
+    else:
+        calendar_view(user, store)
 
 
 def today_view(user: dict, store: dict) -> None:
@@ -221,6 +234,85 @@ def today_view(user: dict, store: dict) -> None:
                 st.rerun()
             if action_cols[1].button("Delete", key=f"delete_{note['id']}"):
                 user["notes"].remove(note)
+                save_store(store)
+                st.rerun()
+
+
+def habits_view(user: dict, store: dict) -> None:
+    today = date.today()
+    st.markdown('<div class="eyebrow">Habits · small actions, visible progress</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero"><h1>Build a rhythm.</h1><p>Check in once a day. The graph makes consistency feel concrete.</p></div>', unsafe_allow_html=True)
+    if not user["habits"]:
+        st.info("Add your first habit below to begin your streak.")
+    for habit in user["habits"]:
+        history = habit.setdefault("history", {})
+        completed_days = sum(1 for day in history.values() if day)
+        current = history.get(today.isoformat(), False)
+        cols = st.columns([2.3, 1.1, .8])
+        with cols[0]:
+            st.markdown(f'<div class="note-card {habit.get("color", "mint")}" style="min-height:5.5rem"><small>{habit["goal"]} · {completed_days} check-ins</small><h3>{habit["name"]}</h3><p>{"Done today" if current else "Ready for today"}</p></div>', unsafe_allow_html=True)
+        with cols[1]:
+            checked = st.checkbox("Complete today", value=current, key=f"habit_{habit['id']}")
+            if checked != current:
+                history[today.isoformat()] = checked
+                save_store(store)
+                st.rerun()
+        with cols[2]:
+            if st.button("Delete", key=f"habit_delete_{habit['id']}"):
+                user["habits"].remove(habit)
+                save_store(store)
+                st.rerun()
+        graph_values = {}
+        for offset in range(6, -1, -1):
+            day = today - timedelta(days=offset)
+            graph_values[day.strftime("%a")] = 1 if history.get(day.isoformat(), False) else 0
+        st.bar_chart(graph_values, height=120, color="#e8785d")
+    with st.expander("+ Add a habit", expanded=not user["habits"]):
+        with st.form("new_habit"):
+            cols = st.columns([1.4, 1, .8])
+            name = cols[0].text_input("Habit", placeholder="Stretch, journal, walk...")
+            goal = cols[1].text_input("Tiny goal", placeholder="10 minutes")
+            color = cols[2].selectbox("Color", ["mint", "blue", "yellow", "coral"])
+            if st.form_submit_button("Add habit", type="primary") and name.strip():
+                user["habits"].append({"id": secrets.token_hex(5), "name": name.strip(), "goal": goal.strip() or "Daily", "color": color, "history": {}})
+                save_store(store)
+                st.rerun()
+
+
+def calendar_view(user: dict, store: dict) -> None:
+    today = date.today()
+    st.markdown('<div class="eyebrow">Calendar · what has a place in your day</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero"><h1>Make time visible.</h1><p>A simple agenda for appointments, plans, and the moments your tasks depend on.</p></div>', unsafe_allow_html=True)
+    with st.expander("+ Add an event", expanded=False):
+        with st.form("new_event"):
+            cols = st.columns([1.7, 1, .8, .7])
+            title = cols[0].text_input("Event", placeholder="Dentist, focus block, dinner...")
+            event_date = cols[1].date_input("Date", value=today)
+            event_time = cols[2].time_input("Time", value=datetime.now().replace(second=0, microsecond=0).time())
+            color = cols[3].selectbox("Color", ["coral", "blue", "mint", "yellow"])
+            if st.form_submit_button("Add event", type="primary") and title.strip():
+                user["events"].append({"id": secrets.token_hex(5), "title": title.strip(), "date": event_date.isoformat(), "time": event_time.strftime("%H:%M"), "color": color})
+                save_store(store)
+                st.rerun()
+    st.markdown('<div class="section-label">Next 30 days</div>', unsafe_allow_html=True)
+    events = sorted(user["events"], key=lambda event: (event["date"], event["time"]))
+    upcoming = [event for event in events if event["date"] >= today.isoformat()]
+    if not upcoming:
+        st.info("Your calendar is clear. Add an event above.")
+    for event in upcoming:
+        event_day = date.fromisoformat(event["date"])
+        if event_day > today + timedelta(days=30):
+            continue
+        cols = st.columns([.8, 2.5, .8, .5])
+        with cols[0]:
+            st.markdown(f'<div class="today-chip">{event_day.strftime("%b %-d")}</div>', unsafe_allow_html=True)
+        with cols[1]:
+            st.markdown(f'<div class="task-row"><strong>{event["title"]}</strong><br><small>{event_day.strftime("%A")} · {event["time"]}</small></div>', unsafe_allow_html=True)
+        with cols[2]:
+            st.caption(event.get("color", "event"))
+        with cols[3]:
+            if st.button("×", key=f"event_delete_{event['id']}"):
+                user["events"].remove(event)
                 save_store(store)
                 st.rerun()
 
