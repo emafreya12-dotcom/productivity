@@ -54,8 +54,8 @@ def new_user(email: str, password: str) -> dict:
         "password": hash_password(password),
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "notes": [
-            {"id": secrets.token_hex(5), "title": "A softer start", "body": "What would make today feel lighter?", "color": "coral", "updated": "Today"},
-            {"id": secrets.token_hex(5), "title": "Weekend ideas", "body": "Museum, long walk, something new to cook.", "color": "mint", "updated": "Yesterday"},
+            {"id": secrets.token_hex(5), "title": "A softer start", "body": "What would make today feel lighter?", "color": "coral", "updated": "Today", "pinned": True},
+            {"id": secrets.token_hex(5), "title": "Weekend ideas", "body": "Museum, long walk, something new to cook.", "color": "mint", "updated": "Yesterday", "pinned": False},
         ],
         "tasks": [
             {"id": secrets.token_hex(5), "title": "Choose three priorities", "due": today, "project": "Today", "done": False},
@@ -84,7 +84,7 @@ def inject_styles() -> None:
         .brand { font-weight:800; font-size:1.65rem; letter-spacing:-.07em; margin-bottom:3rem; }
         .brand span { color:var(--coral); }
         .side-note { color:#617069; font-size:.8rem; line-height:1.5; margin:2.5rem 0; }
-        .hero { padding:2rem 0 1.5rem; border-bottom:1px solid var(--line); margin-bottom:2rem; }
+        .hero { padding:1.25rem 0 1rem; border-bottom:1px solid var(--line); margin-bottom:1.25rem; }
         .hero p { color:#52615c; max-width:34rem; font-size:1.03rem; }
         .stat { background:white; border:1px solid var(--line); border-radius:5px; padding:1.1rem 1.2rem; min-height:7rem; }
         .stat strong { display:block; font-size:2rem; letter-spacing:-.06em; }
@@ -99,6 +99,7 @@ def inject_styles() -> None:
         .keep-board { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.8rem; }
         .keep-board .note-card { margin:0; min-height:8.5rem; }
         @media (max-width: 720px) { .keep-board { grid-template-columns:1fr; } }
+        .keep-search { background:white; border:1px solid var(--line); border-radius:5px; padding:.2rem .6rem; }
         .today-chip { display:inline-block; background:var(--ink); color:white; border-radius:999px; padding:.32rem .65rem; font:500 .68rem 'DM Mono',monospace; }
         .stButton button { border-radius:4px; border:1px solid var(--ink); font-weight:700; min-height:2.5rem; }
         .stButton button[kind="primary"] { background:var(--coral); border-color:var(--coral); color:white; }
@@ -177,43 +178,49 @@ def app_screen(store: dict, email: str) -> None:
 
 def today_view(user: dict, store: dict) -> None:
     today = date.today().isoformat()
-    formatted_today = date.today().strftime("%A · %B %-d, %Y")
-    current_time = datetime.now().strftime("%-I:%M %p")
-    due = [task for task in user["tasks"] if task["due"] <= today and not task["done"]]
-    done = sum(task["done"] for task in user["tasks"])
-    st.markdown(f'<div class="eyebrow">{formatted_today} · {current_time}</div>', unsafe_allow_html=True)
-    st.markdown('<div class="hero"><h1>Today, in one place.</h1><p>Your quick thoughts, small promises, and the one thing worth doing next.</p></div>', unsafe_allow_html=True)
-    cols = st.columns(3)
-    for col, number, label in zip(cols, [len(due), len(user["notes"]), done], ["open today", "saved notes", "tasks finished"]):
-        with col:
-            st.markdown(f'<div class="stat"><strong>{number}</strong><small>{label}</small></div>', unsafe_allow_html=True)
+    st.markdown('<div class="eyebrow">Luma Keep · your notes</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero"><h1>Today</h1><p>Capture a thought, pin what matters, and find it again when you need it.</p></div>', unsafe_allow_html=True)
+    search = st.text_input("Search your notes", placeholder="Search notes", label_visibility="collapsed")
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="section-label">Pinned thoughts · tap into the day</div>', unsafe_allow_html=True)
-    note_markup = []
-    for note in user["notes"][:3]:
-        note_markup.append(f'<div class="note-card {note.get("color", "yellow")}"><small>● {note.get("updated", "Saved")} · note</small><h3>{note["title"]}</h3><p>{note["body"]}</p></div>')
-    st.markdown(f'<div class="keep-board">{"".join(note_markup)}</div>', unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-    quick, list_col = st.columns([.9, 1.1], gap="large")
-    with quick:
-        st.markdown('<div class="section-label">Quick capture</div>', unsafe_allow_html=True)
-        with st.form("quick_capture"):
-            capture = st.text_input("What is on your mind?", placeholder="Write a thought or task...")
-            capture_type = st.selectbox("Save as", ["Note", "Task"], label_visibility="collapsed")
-            if st.form_submit_button("Capture", type="primary") and capture.strip():
-                if capture_type == "Note":
-                    user["notes"].insert(0, {"id": secrets.token_hex(5), "title": "Quick thought", "body": capture.strip(), "color": "yellow", "updated": "Just now"})
-                else:
-                    user["tasks"].insert(0, {"id": secrets.token_hex(5), "title": capture.strip(), "due": today, "project": "Today", "done": False})
+    with st.expander("Take a note...", expanded=False):
+        with st.form("keep_capture"):
+            title = st.text_input("Title", placeholder="Title")
+            body = st.text_area("Take a note", placeholder="Write a note...", height=100)
+            capture_cols = st.columns([1, 1, .7])
+            color = capture_cols[0].selectbox("Color", ["yellow", "coral", "mint", "blue"])
+            pinned = capture_cols[1].checkbox("Pin to top")
+            captured = capture_cols[2].form_submit_button("Save", type="primary")
+            if captured and body.strip():
+                user["notes"].insert(0, {"id": secrets.token_hex(5), "title": title.strip() or "Untitled note", "body": body.strip(), "color": color, "updated": "Just now", "pinned": pinned})
                 save_store(store)
                 st.rerun()
-    with list_col:
-        st.markdown('<div class="section-label">On your plate</div>', unsafe_allow_html=True)
-        if not due:
-            st.success("Everything important is clear for now.")
-        for task in due[:4]:
+    view = st.radio("Note filter", ["All notes", "Pinned", "Tasks due today"], horizontal=True, label_visibility="collapsed")
+    if view == "Tasks due today":
+        due = [task for task in user["tasks"] if task["due"] <= today and not task["done"]]
+        for task in due:
             if st.checkbox(task["title"], key=f"today_{task['id']}"):
                 task["done"] = True
+                save_store(store)
+                st.rerun()
+        if not due:
+            st.info("No tasks due today.")
+        return
+    notes = [note for note in user["notes"] if (not search.strip() or search.lower() in f"{note['title']} {note['body']}".lower()) and (view == "All notes" or note.get("pinned", False))]
+    notes.sort(key=lambda note: (not note.get("pinned", False), note.get("updated", "")))
+    st.markdown('<div class="section-label">Pinned notes</div>', unsafe_allow_html=True)
+    note_columns = st.columns(3)
+    for index, note in enumerate(notes):
+        if "pinned" not in note:
+            note["pinned"] = False
+        with note_columns[index % 3]:
+            st.markdown(f'<div class="note-card {note.get("color", "yellow")}"><small>{"📌 Pinned" if note.get("pinned") else "Note"} · {note.get("updated", "Saved")}</small><h3>{note["title"]}</h3><p>{note["body"]}</p></div>', unsafe_allow_html=True)
+            action_cols = st.columns(2)
+            if action_cols[0].button("Unpin" if note.get("pinned") else "Pin", key=f"pin_{note['id']}"):
+                note["pinned"] = not note.get("pinned", False)
+                save_store(store)
+                st.rerun()
+            if action_cols[1].button("Delete", key=f"delete_{note['id']}"):
+                user["notes"].remove(note)
                 save_store(store)
                 st.rerun()
 
